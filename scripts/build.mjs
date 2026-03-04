@@ -1,10 +1,10 @@
 import fs from "fs";
 import path from "path";
 
-// 1. Configuration: Add new top-level folders here to create new registry files
 const REGISTRY_CONFIG = {
   "chat": {
     name: "chat-ui",
+    targetPath: "cascaide-ui/chat", 
     dependencies: [
       "@cascaide-ts/react",
       "lucide-react",
@@ -53,7 +53,7 @@ const REGISTRY_CONFIG = {
 const OUTPUT_DIR = "./registry";
 
 /**
- * Recursively gets all files in a directory and formats them for the shadcn registry.
+ * Recursively gets all files in a directory.
  */
 function getFiles(dir, baseDir) {
   let results = [];
@@ -67,12 +67,11 @@ function getFiles(dir, baseDir) {
     if (stat && stat.isDirectory()) {
       results = results.concat(getFiles(filePath, baseDir));
     } else {
-      // We only want to package component files
+      // Filter for code files
       if (file.endsWith('.tsx') || file.endsWith('.ts') || file.endsWith('.css')) {
         results.push({
-          path: path.relative(baseDir, filePath),
+          innerPath: path.relative(baseDir, filePath),
           content: fs.readFileSync(filePath, "utf8"),
-          type: "registry:ui",
         });
       }
     }
@@ -94,21 +93,29 @@ Object.entries(REGISTRY_CONFIG).forEach(([dirName, config]) => {
     return;
   }
 
+  const rawFiles = getFiles(sourcePath, sourcePath);
+
   const registryEntry = {
     name: config.name,
-    type: "registry:ui",
+    // Using registry:block ensures shadcn respects our custom folder structure
+    type: "registry:block", 
     dependencies: config.dependencies,
     devDependencies: config.devDependencies,
     registryDependencies: config.registryDependencies,
-    files: getFiles(sourcePath, sourcePath),
+    files: rawFiles.map(file => ({
+      // Combine targetPath with the inner file structure
+      path: path.join(config.targetPath, file.innerPath).replace(/\\/g, '/'),
+      content: file.content,
+      type: "registry:ui",
+    })),
     tailwind: config.tailwind,
   };
 
-  const fileName = `${dirName}.json`;
-  const outputPath = path.join(OUTPUT_DIR, fileName);
+  const outputPath = path.join(OUTPUT_DIR, `${dirName}.json`);
   
   fs.writeFileSync(outputPath, JSON.stringify(registryEntry, null, 2));
-  console.log(`✅ Registry built: ${outputPath} (${registryEntry.files.length} files)`);
+  console.log(`✅ Registry built: ${outputPath}`);
+  console.log(`📂 Destination: components/${config.targetPath}`);
 });
 
-console.log("\n🚀 All registries are ready to be pushed to GitHub.");
+console.log("\n🚀 Build complete. Push the 'registry/' folder to GitHub.");
