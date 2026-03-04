@@ -4,6 +4,7 @@ import path from "path";
 const REGISTRY_CONFIG = {
   "chat": {
     name: "chat-ui",
+    // This defines the folder structure inside the project's 'components' dir
     targetPath: "cascaide-ui/chat", 
     dependencies: [
       "@cascaide-ts/react",
@@ -33,28 +34,16 @@ const REGISTRY_CONFIG = {
           extend: {
             colors: {
               "sidebar-bg": "#030712",
-            },
-            animation: {
-              "fade-in": "fade-in 0.5s ease-out",
-            },
-            keyframes: {
-              "fade-in": {
-                "0%": { opacity: "0", transform: "translateY(10px)" },
-                "100%": { opacity: "1", transform: "translateY(0)" },
-              },
-            },
-          },
-        },
-      },
-    },
-  },
+            }
+          }
+        }
+      }
+    }
+  }
 };
 
 const OUTPUT_DIR = "./registry";
 
-/**
- * Recursively gets all files in a directory.
- */
 function getFiles(dir, baseDir) {
   let results = [];
   if (!fs.existsSync(dir)) return results;
@@ -67,7 +56,6 @@ function getFiles(dir, baseDir) {
     if (stat && stat.isDirectory()) {
       results = results.concat(getFiles(filePath, baseDir));
     } else {
-      // Filter for code files
       if (file.endsWith('.tsx') || file.endsWith('.ts') || file.endsWith('.css')) {
         results.push({
           innerPath: path.relative(baseDir, filePath),
@@ -79,43 +67,31 @@ function getFiles(dir, baseDir) {
   return results;
 }
 
-// Ensure output directory exists
-if (!fs.existsSync(OUTPUT_DIR)) {
-  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-}
+if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
-// Generate the JSON files
 Object.entries(REGISTRY_CONFIG).forEach(([dirName, config]) => {
   const sourcePath = path.join(process.cwd(), dirName);
-  
-  if (!fs.existsSync(sourcePath)) {
-    console.warn(`⚠️  Source directory "${dirName}" not found. Skipping...`);
-    return;
-  }
+  if (!fs.existsSync(sourcePath)) return;
 
   const rawFiles = getFiles(sourcePath, sourcePath);
 
   const registryEntry = {
     name: config.name,
-    // Using registry:block ensures shadcn respects our custom folder structure
-    type: "registry:block", 
+    type: "registry:block", // High-level type
     dependencies: config.dependencies,
     devDependencies: config.devDependencies,
     registryDependencies: config.registryDependencies,
     files: rawFiles.map(file => ({
-      // Combine targetPath with the inner file structure
       path: path.join(config.targetPath, file.innerPath).replace(/\\/g, '/'),
       content: file.content,
-      type: "registry:ui",
+      type: "registry:component", 
     })),
     tailwind: config.tailwind,
   };
 
-  const outputPath = path.join(OUTPUT_DIR, `${dirName}.json`);
-  
-  fs.writeFileSync(outputPath, JSON.stringify(registryEntry, null, 2));
-  console.log(`✅ Registry built: ${outputPath}`);
-  console.log(`📂 Destination: components/${config.targetPath}`);
+  fs.writeFileSync(
+    path.join(OUTPUT_DIR, `${dirName}.json`),
+    JSON.stringify(registryEntry, null, 2)
+  );
+  console.log(`✅ Registry built for ${dirName}. Targeting: components/${config.targetPath}`);
 });
-
-console.log("\n🚀 Build complete. Push the 'registry/' folder to GitHub.");
