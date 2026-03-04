@@ -4,8 +4,7 @@ import path from "path";
 const REGISTRY_CONFIG = {
   "chat": {
     name: "chat-ui",
-    // This defines the exact folder structure inside the project's 'components' dir
-    targetPath: "cascaide-ui/chat", 
+    targetPath: "cascaide-ui/chat",
     dependencies: [
       "@cascaide-ts/react",
       "lucide-react",
@@ -21,9 +20,9 @@ const REGISTRY_CONFIG = {
     ],
     devDependencies: ["@types/uuid"],
     registryDependencies: [
-      "button", 
-      "scroll-area", 
-      "badge", 
+      "button",
+      "scroll-area",
+      "badge",
       "separator",
       "avatar",
       "card"
@@ -47,16 +46,15 @@ const OUTPUT_DIR = "./registry";
 function getFiles(dir, baseDir) {
   let results = [];
   if (!fs.existsSync(dir)) return results;
-  
+
   const list = fs.readdirSync(dir);
   list.forEach((file) => {
     const filePath = path.join(dir, file);
     const stat = fs.statSync(filePath);
-    
+
     if (stat && stat.isDirectory()) {
       results = results.concat(getFiles(filePath, baseDir));
     } else {
-      // Only capture valid code files
       if (file.endsWith('.tsx') || file.endsWith('.ts') || file.endsWith('.css')) {
         results.push({
           innerPath: path.relative(baseDir, filePath),
@@ -72,31 +70,41 @@ if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
 Object.entries(REGISTRY_CONFIG).forEach(([dirName, config]) => {
   const sourcePath = path.join(process.cwd(), dirName);
-  if (!fs.existsSync(sourcePath)) return;
+  if (!fs.existsSync(sourcePath)) {
+    console.warn(`⚠️  Source directory not found, skipping: ${sourcePath}`);
+    return;
+  }
 
   const rawFiles = getFiles(sourcePath, sourcePath);
 
   const registryEntry = {
     name: config.name,
-    // Using registry:block tells the CLI this is a feature, not a primitive
-    type: "registry:block", 
+    type: "registry:block",
     dependencies: config.dependencies,
     devDependencies: config.devDependencies,
     registryDependencies: config.registryDependencies,
-    files: rawFiles.map(file => ({
-      // Clean up the path and fix the .tsx.tsx naming issue
-      path: path.join(config.targetPath, file.innerPath).replace(/\\/g, '/'),
-      content: file.content,
-      // CRITICAL CHANGE: registry:component respects our path property.
-      // registry:ui would override it and force it into components/ui.
-      type: "registry:component", 
-    })),
+    files: rawFiles.map(file => {
+      // Normalize to forward slashes on all platforms
+      const resolvedPath = path
+        .join(config.targetPath, file.innerPath)
+        .replace(/\\/g, '/');
+
+      return {
+        path: resolvedPath,
+        content: file.content,
+        type: "registry:component",
+        // KEY FIX: target forces shadcn to place the file at this exact path,
+        // bypassing all internal path resolution heuristics
+        target: resolvedPath,
+      };
+    }),
     tailwind: config.tailwind,
   };
 
-  fs.writeFileSync(
-    path.join(OUTPUT_DIR, `${dirName}.json`),
-    JSON.stringify(registryEntry, null, 2)
-  );
-  console.log(`✅ Registry built: components/${config.targetPath}`);
+  const outputFile = path.join(OUTPUT_DIR, `${dirName}.json`);
+  fs.writeFileSync(outputFile, JSON.stringify(registryEntry, null, 2));
+
+  console.log(`✅ Registry built: ${outputFile}`);
+  console.log(`   Files included (${registryEntry.files.length}):`);
+  registryEntry.files.forEach(f => console.log(`     → ${f.target}`));
 });
